@@ -1,0 +1,170 @@
+// ============================================================
+// Prisma Schema for ModuLink Chat App
+// Think of this file as the "blueprint" for your database.
+// Every model here becomes a table in MySQL.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------
+// USER: Stores account information for every person
+// -------------------------------------------------------
+model User {
+  id        Int      @id @default(autoincrement()) // Auto-incrementing primary key
+  email     String   @unique                       // Must be unique — used for login
+  username  String   @unique                       // Unique display handle e.g. "@john"
+  password  String                                 // Hashed password (never store plain text!)
+  name      String?                                // Display name (optional)
+  avatar    String?                                // URL to profile picture
+  bio       String?  @db.Text                      // Short description about the user
+  isOnline  Boolean  @default(false)               // True while user is connected via WebSocket
+  lastSeen  DateTime?                              // Timestamp of last activity
+  pushToken String?                                // Expo push token for device notifications
+  createdAt DateTime @default(now())               // Account creation time
+
+  // Relations — what this user is connected to
+  sentMessages             Message[]                  @relation("SentMessages")
+  conversations            ConversationParticipant[]
+  posts                    Post[]
+  stories                  Story[]
+  likes                    Like[]
+  comments                 Comment[]
+  followers                Follow[]                   @relation("Following")   // people who follow this user
+  following                Follow[]                   @relation("Followers")   // people this user follows
+}
+
+// -------------------------------------------------------
+// CONVERSATION: A chat session — either 1-on-1 or group
+// -------------------------------------------------------
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  isGroup   Boolean  @default(false)    // False = Direct Message, True = Group Chat
+  name      String?                     // Group name (null for DMs)
+  avatar    String?                     // Group profile picture URL
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt         // Auto-updates when anything changes
+
+  // Relations
+  messages     Message[]
+  participants ConversationParticipant[]
+}
+
+// -------------------------------------------------------
+// CONVERSATION PARTICIPANT: Links users to conversations
+// This is a "join table" — many users can be in many conversations
+// -------------------------------------------------------
+model ConversationParticipant {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  joinedAt       DateTime @default(now())
+
+  // Foreign keys — link to User and Conversation rows
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId]) // A user can only be in a conversation once
+}
+
+// -------------------------------------------------------
+// MESSAGE: A single chat message
+// -------------------------------------------------------
+model Message {
+  id             Int      @id @default(autoincrement())
+  content        String?  @db.Text   // Text content (null for pure media messages)
+  mediaUrl       String?             // URL to image/video attachment
+  messageType    String   @default("text")    // "text" | "image" | "video"
+  status         String   @default("sent")    // "sent" | "delivered" | "read"
+  senderId       Int
+  conversationId Int
+  createdAt      DateTime @default(now())
+
+  // Relations
+  sender       User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------
+// POST: An Instagram-style photo/video post
+// -------------------------------------------------------
+model Post {
+  id        Int      @id @default(autoincrement())
+  caption   String?  @db.Text   // Optional caption/description
+  mediaUrl  String?  @db.LongText // Base64 image data
+  authorId  Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes    Like[]
+  comments Comment[]
+}
+
+// -------------------------------------------------------
+// STORY: Temporary Instagram-style content (lasts 24 hours)
+// -------------------------------------------------------
+model Story {
+  id        Int      @id @default(autoincrement())
+  mediaUrl  String               // Required — every story must have media
+  caption   String?  @db.Text
+  authorId  Int
+  expiresAt DateTime             // Stories auto-expire after 24 hours
+  createdAt DateTime @default(now())
+
+  // Relations
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------
+// LIKE: Records who liked which post
+// -------------------------------------------------------
+model Like {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  postId    Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // A user can only like a post once
+}
+
+// -------------------------------------------------------
+// COMMENT: A text comment on a post
+// -------------------------------------------------------
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  userId    Int
+  postId    Int
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------
+// FOLLOW: Records who follows whom (social graph)
+// -------------------------------------------------------
+model Follow {
+  id          Int      @id @default(autoincrement())
+  followerId  Int      // The person doing the following
+  followingId Int      // The person being followed
+  createdAt   DateTime @default(now())
+
+  // Relations — two separate relations to the same User model
+  follower  User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId]) // Can only follow someone once
+}

@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    // Target modern Node.js — keeps async/await as-is
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+
+    // Output compiled JS to dist/
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    // Strict mode catches type errors early
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+
+    // Allow default imports from CommonJS modules (e.g. multer)
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    // Include type declarations
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    // Source maps for readable stack traces
+    "sourceMap": true,
+
+    // Keep comments in compiled output
+    "removeComments": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
